@@ -1,0 +1,2 @@
+class OrderRuleViolation(ValueError):
+    pass
