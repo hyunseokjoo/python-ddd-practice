@@ -5,7 +5,7 @@ h-port의 공통 원칙을 Python DDD 학습 프로젝트에 맞게 적용한다
 ## 구조와 설계
 
 - 업무 영역은 `app/domains/orders/`처럼 `domains/` 아래에 모으고 각 영역 안에서 `domain`, `application`, `infrastructure`, `presentation`을 나눈다. 공통 코드는 `shared/`, 의존성 조립은 `bootstrap/`에 둔다.
-- 트랜잭션은 `sqlalchemy-transactional`의 `@transactional`로 관리한다. 조회·변경 유스케이스는 비동기 함수로 작성하고, Repository는 `current_session()`을 사용한다. 세션 팩토리 컨텍스트는 `bootstrap/container.py`의 요청 경계에서 연결하며 직접 UoW를 구현하지 않는다.
+- 공통 요청 경계(`bootstrap/container.py`)에서 AsyncSession과 트랜잭션을 열고, 요청 정상 종료 시 응답 전송 전에 한 번 자동 커밋하며 예외 시 롤백한다. 컨테이너는 같은 세션을 모든 Repository에 주입한다. Application은 Repository로 업무만 수행하고 Session을 인자로 받거나 begin·commit·rollback하지 않는다. Repository는 SQL 실행과 필요한 flush만 한다. CLI·배치는 실행 진입점에서 같은 역할의 경계를 연다. 유스케이스마다 트랜잭션을 중첩하거나 별도 자동 전파 라이브러리·UoW를 구현하지 않는다.
 - 도메인 용어를 코드 이름에 반영하고, 업무 규칙은 도메인 모델에 둔다.
 - 엔티티는 식별성과 생명주기를, 값 객체는 값의 동등성과 불변성을 기준으로 구분한다.
 - 애그리거트 내부의 일관성은 루트의 동작으로 지킨다. 외부에서 필드를 임의로 바꿔 규칙을 우회하지 않는다.

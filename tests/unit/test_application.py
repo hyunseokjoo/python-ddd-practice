@@ -28,8 +28,6 @@ from app.domains.orders.domain.order import Order
 from app.domains.orders.domain.order_line import OrderLine
 from app.domains.orders.domain.repository import OrderRepository
 
-pytestmark = pytest.mark.usefixtures("transaction_context")
-
 ORDER_ID = UUID(int=1)
 
 

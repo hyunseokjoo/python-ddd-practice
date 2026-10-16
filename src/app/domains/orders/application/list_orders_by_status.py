@@ -1,6 +1,5 @@
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy_transactional.asyncio import transactional
 
 from app.domains.orders.domain.order import Order
 from app.domains.orders.domain.repository import OrderRepository
@@ -20,7 +19,6 @@ class ListOrdersByStatusQuery(BaseModel):
         "작업 실패: {record[exception].type.__name__} use_case=list_orders_by_status"
     ),
 )
-@transactional
 async def list_orders_by_status(
     query: ListOrdersByStatusQuery,
     orders: OrderRepository,

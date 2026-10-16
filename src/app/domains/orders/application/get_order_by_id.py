@@ -2,7 +2,6 @@ from uuid import UUID
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy_transactional.asyncio import transactional
 
 from app.domains.orders.application.exceptions import OrderNotFound
 from app.domains.orders.domain.order import Order
@@ -19,7 +18,6 @@ class GetOrderByIdQuery(BaseModel):
     reraise=True,
     message=("작업 실패: {record[exception].type.__name__} use_case=get_order_by_id"),
 )
-@transactional
 async def get_order_by_id(
     query: GetOrderByIdQuery,
     orders: OrderRepository,

@@ -1,7 +1,7 @@
 [project]
 name = "python-ddd-practice"
 version = "0.1.0"
-description = "FastAPI, DDD, CQRS and async transaction propagation example"
+description = "FastAPI, DDD, CQRS and explicit async transaction boundaries example"
 readme = "README.md"
 requires-python = ">=3.15,<3.16"
 dependencies = [
@@ -14,8 +14,7 @@ dependencies = [
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
     "pymysql[rsa]>=1.2.3",
-    "sqlalchemy>=2.1.4",
-    "sqlalchemy-transactional==1.0.3",
+    "sqlalchemy[asyncio]>=2.1.4",
 ]
 
 [build-system]
@@ -50,8 +49,3 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "ruff>=0.17.0",
 ]
-
-# 1.0.3은 py.typed를 배포하지 않으므로 패키지의 타입 주석을 직접 분석한다.
-[[tool.mypy.overrides]]
-module = "sqlalchemy_transactional.*"
-follow_untyped_imports = true

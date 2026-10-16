@@ -1137,8 +1137,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pymysql", extra = ["rsa"] },
-    { name = "sqlalchemy" },
-    { name = "sqlalchemy-transactional" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
 [package.dev-dependencies]
@@ -1161,8 +1160,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.14.1" },
     { name = "pydantic-settings", specifier = ">=2.16.0" },
     { name = "pymysql", extras = ["rsa"], specifier = ">=1.2.3" },
-    { name = "sqlalchemy", specifier = ">=2.1.4" },
-    { name = "sqlalchemy-transactional", specifier = "==1.0.3" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.4" },
 ]
 
 [package.metadata.requires-dev]
@@ -1362,18 +1360,6 @@ wheels = [
 [package.optional-dependencies]
 asyncio = [
     { name = "greenlet" },
-]
-
-[[package]]
-name = "sqlalchemy-transactional"
-version = "1.0.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "sqlalchemy", extra = ["asyncio"] },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a5/d6/8321b8dbfa9dbcaf3075936b85f0762731d19925cba8c73c355737382a16/sqlalchemy_transactional-1.0.3.tar.gz", hash = "sha256:c919f74ce1abcf1eea3b1bd777a400f2e2e0935b9c29319d252a0ab39bb6fb16", size = 6213, upload-time = "2026-02-08T17:11:15.622Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3a/e2/4026e92c20ff28e0682221fa0d4db587be7d8cb72af8987f143de23c7204/sqlalchemy_transactional-1.0.3-py3-none-any.whl", hash = "sha256:663d0e728b57c15cf869422de9104b04281347700792f752067f83345e50392c", size = 8710, upload-time = "2026-02-08T17:11:14.618Z" },
 ]
 
 [[package]]

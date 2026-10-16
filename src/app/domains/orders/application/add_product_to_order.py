@@ -2,7 +2,6 @@ from uuid import UUID
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy_transactional.asyncio import transactional
 
 from app.domains.orders.application.exceptions import OrderNotFound
 from app.domains.orders.domain.order_line import OrderLine
@@ -22,7 +21,6 @@ class AddProductToOrderCommand(BaseModel):
         "작업 실패: {record[exception].type.__name__} use_case=add_product_to_order"
     ),
 )
-@transactional
 async def add_product_to_order(
     command: AddProductToOrderCommand,
     orders: OrderRepository,
