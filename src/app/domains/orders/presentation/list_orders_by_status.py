@@ -22,7 +22,7 @@ class OrderSummary(BaseModel):
 
 
 @router.get("", response_model=list[OrderSummary])
-def list_orders_by_status(
+async def list_orders_by_status(
     query: Annotated[ListOrdersByStatusQuery, Query()],
     container: RequestContainerDependency,
 ) -> list[OrderSummary]:
@@ -34,5 +34,5 @@ def list_orders_by_status(
             item_count=order.item_count,
             version=order.version,
         )
-        for order in container.orders().list_orders_by_status(query)
+        for order in await container.orders().list_orders_by_status(query)
     ]

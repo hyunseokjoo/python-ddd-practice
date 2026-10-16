@@ -16,11 +16,11 @@ class CreateOrderResponse(BaseModel):
 
 
 @router.post("", status_code=201, response_model=CreateOrderResponse)
-def create_order(
+async def create_order(
     response: Response,
     container: RequestContainerDependency,
 ) -> CreateOrderResponse:
-    order_id = container.orders().create_order(
+    order_id = await container.orders().create_order(
         CreateOrderCommand(),
     )
     response.headers["Location"] = f"/orders/{order_id}"

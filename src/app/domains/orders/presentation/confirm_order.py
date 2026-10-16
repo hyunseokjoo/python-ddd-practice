@@ -11,11 +11,11 @@ router = APIRouter()
 
 
 @router.post("/{order_id}/confirm", status_code=204)
-def confirm_order(
+async def confirm_order(
     order_id: UUID,
     container: RequestContainerDependency,
 ) -> Response:
-    container.orders().confirm_order(
+    await container.orders().confirm_order(
         ConfirmOrderCommand(order_id=order_id),
     )
     return Response(status_code=204)

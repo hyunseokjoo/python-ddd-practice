@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
@@ -27,7 +27,8 @@ from app.domains.orders.domain.exceptions import OrderRuleViolation
 from app.domains.orders.domain.order import Order
 from app.domains.orders.domain.order_line import OrderLine
 from app.domains.orders.domain.repository import OrderRepository
-from app.shared.database.uow import UnitOfWork
+
+pytestmark = pytest.mark.usefixtures("transaction_context")
 
 ORDER_ID = UUID(int=1)
 
@@ -38,11 +39,6 @@ def orders() -> Mock:
 
 
 @pytest.fixture
-def uow() -> MagicMock:
-    return MagicMock(spec_set=UnitOfWork)
-
-
-@pytest.fixture
 def order() -> Order:
     return Order(
         ORDER_ID,
@@ -50,62 +46,54 @@ def order() -> Order:
     )
 
 
-def test_create_order_stores_a_draft_and_commits(orders: Mock, uow: MagicMock) -> None:
-    order_id = create_order(CreateOrderCommand(order_id=ORDER_ID), orders, uow)
+async def test_create_order_stores_a_draft(orders: Mock) -> None:
+    order_id = await create_order(CreateOrderCommand(order_id=ORDER_ID), orders)
 
     assert order_id == ORDER_ID
-    orders.add.assert_called_once()
+    orders.add.assert_awaited_once()
     saved = orders.add.call_args.args[0]
     assert saved.id == ORDER_ID
     assert saved.status == Order.Status.DRAFT
     assert saved.lines == ()
-    uow.__enter__.assert_called_once()
-    uow.commit.assert_called_once_with()
-    uow.__exit__.assert_called_once_with(None, None, None)
 
 
-def test_add_product_saves_the_changed_order(
-    orders: Mock, uow: MagicMock, order: Order
-) -> None:
+async def test_add_product_saves_the_changed_order(orders: Mock, order: Order) -> None:
     orders.get.return_value = order
     line = OrderLine(product_id="pen", quantity=3, unit_price_won=1000)
 
-    add_product_to_order(
-        AddProductToOrderCommand(order_id=ORDER_ID, line=line), orders, uow
+    await add_product_to_order(
+        AddProductToOrderCommand(order_id=ORDER_ID, line=line), orders
     )
 
-    orders.get.assert_called_once_with(ORDER_ID)
+    orders.get.assert_awaited_once_with(ORDER_ID)
     assert order.lines[-1] == line
     assert order.total_won == 27000
-    orders.save.assert_called_once_with(order)
-    uow.commit.assert_called_once_with()
+    orders.save.assert_awaited_once_with(order)
 
 
-def test_confirm_order_saves_the_confirmed_order(
-    orders: Mock, uow: MagicMock, order: Order
+async def test_confirm_order_saves_the_confirmed_order(
+    orders: Mock, order: Order
 ) -> None:
     orders.get.return_value = order
 
-    confirm_order(ConfirmOrderCommand(order_id=ORDER_ID), orders, uow)
+    await confirm_order(ConfirmOrderCommand(order_id=ORDER_ID), orders)
 
-    orders.get.assert_called_once_with(ORDER_ID)
+    orders.get.assert_awaited_once_with(ORDER_ID)
     assert order.status == Order.Status.CONFIRMED
-    orders.save.assert_called_once_with(order)
-    uow.commit.assert_called_once_with()
+    orders.save.assert_awaited_once_with(order)
 
 
-def test_cancel_order_saves_the_cancelled_order(
-    orders: Mock, uow: MagicMock, order: Order
+async def test_cancel_order_saves_the_cancelled_order(
+    orders: Mock, order: Order
 ) -> None:
     order.confirm()
     orders.get.return_value = order
 
-    cancel_order(CancelOrderCommand(order_id=ORDER_ID), orders, uow)
+    await cancel_order(CancelOrderCommand(order_id=ORDER_ID), orders)
 
-    orders.get.assert_called_once_with(ORDER_ID)
+    orders.get.assert_awaited_once_with(ORDER_ID)
     assert order.status == Order.Status.CANCELLED
-    orders.save.assert_called_once_with(order)
-    uow.commit.assert_called_once_with()
+    orders.save.assert_awaited_once_with(order)
 
 
 @pytest.mark.parametrize(
@@ -123,78 +111,69 @@ def test_cancel_order_saves_the_cancelled_order(
     ],
     ids=["add_product", "confirm", "cancel"],
 )
-def test_missing_order_is_not_saved_or_committed(
+async def test_missing_order_is_not_saved(
     use_case: Callable[..., None],
     command: AddProductToOrderCommand | ConfirmOrderCommand | CancelOrderCommand,
     orders: Mock,
-    uow: MagicMock,
 ) -> None:
     orders.get.return_value = None
 
     with pytest.raises(OrderNotFound, match=str(ORDER_ID)):
-        use_case(command, orders, uow)
+        await use_case(command, orders)
 
-    orders.get.assert_called_once_with(ORDER_ID)
-    orders.save.assert_not_called()
-    uow.commit.assert_not_called()
-    assert uow.__exit__.call_args.args[0] is OrderNotFound
+    orders.get.assert_awaited_once_with(ORDER_ID)
+    orders.save.assert_not_awaited()
 
 
-def test_rule_violation_is_not_saved_or_committed(orders: Mock, uow: MagicMock) -> None:
+async def test_rule_violation_is_not_saved(orders: Mock) -> None:
     orders.get.return_value = Order(ORDER_ID)
 
     with pytest.raises(OrderRuleViolation):
-        confirm_order(ConfirmOrderCommand(order_id=ORDER_ID), orders, uow)
+        await confirm_order(ConfirmOrderCommand(order_id=ORDER_ID), orders)
 
-    orders.save.assert_not_called()
-    uow.commit.assert_not_called()
-    assert uow.__exit__.call_args.args[0] is OrderRuleViolation
+    orders.save.assert_not_awaited()
 
 
-def test_save_failure_is_propagated_without_committing(
-    orders: Mock, uow: MagicMock, order: Order
-) -> None:
+async def test_save_failure_is_propagated(orders: Mock, order: Order) -> None:
     orders.get.return_value = order
     error = RuntimeError("save failed")
     orders.save.side_effect = error
 
     with pytest.raises(RuntimeError) as caught:
-        confirm_order(ConfirmOrderCommand(order_id=ORDER_ID), orders, uow)
+        await confirm_order(ConfirmOrderCommand(order_id=ORDER_ID), orders)
 
     assert caught.value is error
-    uow.commit.assert_not_called()
-    assert uow.__exit__.call_args.args[1] is error
 
 
-def test_get_order_returns_the_aggregate(orders: Mock, order: Order) -> None:
+async def test_get_order_returns_the_aggregate(orders: Mock, order: Order) -> None:
     orders.get.return_value = order
 
-    result = get_order_by_id(GetOrderByIdQuery(order_id=ORDER_ID), orders)
+    result = await get_order_by_id(GetOrderByIdQuery(order_id=ORDER_ID), orders)
 
     assert result is order
-    orders.get.assert_called_once_with(ORDER_ID)
-    orders.add.assert_not_called()
-    orders.save.assert_not_called()
+    orders.get.assert_awaited_once_with(ORDER_ID)
+    orders.add.assert_not_awaited()
+    orders.save.assert_not_awaited()
 
 
-def test_get_missing_order_raises_not_found(orders: Mock) -> None:
+async def test_get_missing_order_raises_not_found(orders: Mock) -> None:
     orders.get.return_value = None
 
     with pytest.raises(OrderNotFound, match=str(ORDER_ID)):
-        get_order_by_id(GetOrderByIdQuery(order_id=ORDER_ID), orders)
+        await get_order_by_id(GetOrderByIdQuery(order_id=ORDER_ID), orders)
 
 
 @pytest.mark.parametrize("status", [None, Order.Status.CONFIRMED])
-def test_list_orders_passes_filter_and_pagination_to_repository(
+async def test_list_orders_passes_filter_and_pagination_to_repository(
     orders: Mock, order: Order, status: Order.Status | None
 ) -> None:
     orders.list.return_value = [order]
 
-    result = list_orders_by_status(
+    result = await list_orders_by_status(
         ListOrdersByStatusQuery(status=status, limit=5, offset=10), orders
     )
 
     assert result == [order]
-    orders.list.assert_called_once_with(status, 5, 10)
-    orders.add.assert_not_called()
-    orders.save.assert_not_called()
+    orders.list.assert_awaited_once_with(status, 5, 10)
+    orders.add.assert_not_awaited()
+    orders.save.assert_not_awaited()

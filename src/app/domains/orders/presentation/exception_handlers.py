@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.domains.orders.application.exceptions import OrderNotFound
 from app.domains.orders.domain.exceptions import OrderRuleViolation
-from app.shared.database.uow import ConcurrentModification
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -17,8 +17,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def rule_violation(request: Request, exc: OrderRuleViolation) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": str(exc)})
 
-    @app.exception_handler(ConcurrentModification)
-    async def concurrent_change(
-        request: Request, exc: ConcurrentModification
-    ) -> JSONResponse:
-        return JSONResponse(status_code=409, content={"detail": str(exc)})
+    @app.exception_handler(StaleDataError)
+    async def concurrent_change(request: Request, exc: StaleDataError) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "다른 요청이 주문을 변경했습니다. 다시 조회해 주세요."},
+        )

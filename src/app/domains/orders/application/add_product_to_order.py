@@ -2,11 +2,11 @@ from uuid import UUID
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy_transactional.asyncio import transactional
 
 from app.domains.orders.application.exceptions import OrderNotFound
 from app.domains.orders.domain.order_line import OrderLine
 from app.domains.orders.domain.repository import OrderRepository
-from app.shared.database.uow import UnitOfWork
 
 
 class AddProductToOrderCommand(BaseModel):
@@ -16,21 +16,20 @@ class AddProductToOrderCommand(BaseModel):
     line: OrderLine
 
 
-def add_product_to_order(
+@logger.catch(
+    reraise=True,
+    message=(
+        "작업 실패: {record[exception].type.__name__} use_case=add_product_to_order"
+    ),
+)
+@transactional
+async def add_product_to_order(
     command: AddProductToOrderCommand,
     orders: OrderRepository,
-    uow: UnitOfWork,
 ) -> None:
-    with (
-        logger.catch(
-            reraise=True, message="작업 실패: {record[exception].type.__name__}"
-        ),
-        uow,
-    ):
-        order = orders.get(command.order_id)
-        if order is None:
-            raise OrderNotFound(str(command.order_id))
-        order.add_line(command.line)
-        orders.save(order)
-        uow.commit()
-    logger.info("상품 추가 완료 order_id={}", command.order_id)
+    order = await orders.get(command.order_id)
+    if order is None:
+        raise OrderNotFound(str(command.order_id))
+    order.add_line(command.line)
+    await orders.save(order)
+    logger.info("상품 추가 처리 order_id={}", command.order_id)

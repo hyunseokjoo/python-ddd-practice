@@ -2,10 +2,10 @@ from uuid import UUID, uuid4
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy_transactional.asyncio import transactional
 
 from app.domains.orders.domain.order import Order
 from app.domains.orders.domain.repository import OrderRepository
-from app.shared.database.uow import UnitOfWork
 
 
 class CreateOrderCommand(BaseModel):
@@ -14,18 +14,15 @@ class CreateOrderCommand(BaseModel):
     order_id: UUID = Field(default_factory=uuid4)
 
 
-def create_order(
+@logger.catch(
+    reraise=True,
+    message=("작업 실패: {record[exception].type.__name__} use_case=create_order"),
+)
+@transactional
+async def create_order(
     command: CreateOrderCommand,
     orders: OrderRepository,
-    uow: UnitOfWork,
 ) -> UUID:
-    with (
-        logger.catch(
-            reraise=True, message="작업 실패: {record[exception].type.__name__}"
-        ),
-        uow,
-    ):
-        orders.add(Order(command.order_id))
-        uow.commit()
-    logger.info("주문 생성 완료 order_id={}", command.order_id)
+    await orders.add(Order(command.order_id))
+    logger.info("주문 생성 처리 order_id={}", command.order_id)
     return command.order_id

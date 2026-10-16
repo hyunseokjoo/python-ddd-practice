@@ -23,11 +23,13 @@ class OrderDetails(BaseModel):
 
 
 @router.get("/{order_id}", response_model=OrderDetails)
-def get_order_by_id(
+async def get_order_by_id(
     order_id: UUID,
     container: RequestContainerDependency,
 ) -> OrderDetails:
-    order = container.orders().get_order_by_id(GetOrderByIdQuery(order_id=order_id))
+    order = await container.orders().get_order_by_id(
+        GetOrderByIdQuery(order_id=order_id)
+    )
     return OrderDetails(
         order_id=order.id,
         status=order.status,

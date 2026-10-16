@@ -21,12 +21,12 @@ class AddProductRequest(BaseModel):
 
 
 @router.post("/{order_id}/lines", status_code=204)
-def add_product_to_order(
+async def add_product_to_order(
     order_id: UUID,
     body: AddProductRequest,
     container: RequestContainerDependency,
 ) -> Response:
-    container.orders().add_product_to_order(
+    await container.orders().add_product_to_order(
         AddProductToOrderCommand(
             order_id=order_id,
             line=OrderLine.model_validate(body.model_dump()),

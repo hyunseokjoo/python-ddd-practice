@@ -6,9 +6,10 @@ from unittest.mock import patch
 import pytest
 from dependency_injector import providers
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.main import create_app
-from app.shared.database.connection import Settings, build_engine
+from app.shared.database.connection import Settings
 
 
 def test_app_waits_for_async_resource_startup_and_shutdown(database_url: str) -> None:
@@ -62,20 +63,11 @@ def test_app_cleans_up_resources_when_startup_fails(database_url: str) -> None:
     assert not container.session_factory.initialized
 
 
-def test_app_disposes_database_after_failure(
-    database_url: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    engine = build_engine(database_url)
-    monkeypatch.setattr(
-        "app.shared.database.connection.build_engine", lambda url: engine
-    )
-    try:
-        with (
-            patch.object(engine, "dispose", wraps=engine.dispose) as dispose,
-            pytest.raises(RuntimeError, match="application failed"),
-        ):
-            with TestClient(create_app(Settings(database_url=database_url))):
-                raise RuntimeError("application failed")
-        dispose.assert_called_once_with()
-    finally:
-        engine.dispose()
+def test_app_disposes_database_after_failure(database_url: str) -> None:
+    with (
+        patch.object(AsyncEngine, "dispose", autospec=True) as dispose,
+        pytest.raises(RuntimeError, match="application failed"),
+    ):
+        with TestClient(create_app(Settings(database_url=database_url))):
+            raise RuntimeError("application failed")
+    dispose.assert_awaited_once()

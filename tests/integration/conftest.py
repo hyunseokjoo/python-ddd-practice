@@ -1,13 +1,14 @@
 import os
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from uuid import uuid4
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy.engine import make_url
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.schema import CreateSchema, DropSchema
+from sqlalchemy_transactional.asyncio import sessionmaker_context
 
 from app.shared.database.connection import Settings, build_engine, open_database
 
@@ -50,6 +51,9 @@ def database_url() -> Iterator[str]:
 
 
 @pytest.fixture
-def sessions(database_url: str) -> Iterator[sessionmaker[Session]]:
-    with open_database(database_url) as session_factory:
-        yield session_factory
+async def sessions(
+    database_url: str,
+) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    async with open_database(database_url) as session_factory:
+        async with sessionmaker_context(session_factory):
+            yield session_factory

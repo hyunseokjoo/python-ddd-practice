@@ -32,7 +32,8 @@ from app.domains.orders.domain.exceptions import OrderRuleViolation
 from app.domains.orders.domain.order import Order
 from app.domains.orders.domain.order_line import OrderLine
 from app.domains.orders.domain.repository import OrderRepository
-from app.shared.database.uow import UnitOfWork
+
+pytestmark = pytest.mark.usefixtures("transaction_context")
 
 ORDER_ID = UUID(int=1)
 
@@ -49,23 +50,23 @@ def logging_output(monkeypatch: pytest.MonkeyPatch) -> Iterator[StringIO]:
 @pytest.mark.parametrize(
     ("use_case", "command", "success_message"),
     [
-        (create_order, CreateOrderCommand(order_id=ORDER_ID), "주문 생성 완료"),
+        (create_order, CreateOrderCommand(order_id=ORDER_ID), "주문 생성 처리"),
         (
             add_product_to_order,
             AddProductToOrderCommand(
                 order_id=ORDER_ID,
                 line=OrderLine(product_id="pen", quantity=1, unit_price_won=1000),
             ),
-            "상품 추가 완료",
+            "상품 추가 처리",
         ),
-        (confirm_order, ConfirmOrderCommand(order_id=ORDER_ID), "주문 확정 완료"),
-        (cancel_order, CancelOrderCommand(order_id=ORDER_ID), "주문 취소 완료"),
-        (get_order_by_id, GetOrderByIdQuery(order_id=ORDER_ID), "주문 상세 조회 완료"),
-        (list_orders_by_status, ListOrdersByStatusQuery(), "주문 목록 조회 완료"),
+        (confirm_order, ConfirmOrderCommand(order_id=ORDER_ID), "주문 확정 처리"),
+        (cancel_order, CancelOrderCommand(order_id=ORDER_ID), "주문 취소 처리"),
+        (get_order_by_id, GetOrderByIdQuery(order_id=ORDER_ID), "주문 상세 조회 처리"),
+        (list_orders_by_status, ListOrdersByStatusQuery(), "주문 목록 조회 처리"),
     ],
 )
 @pytest.mark.parametrize("fails", [False, True])
-def test_use_case_logs_outcome_and_preserves_errors(
+async def test_use_case_logs_outcome_and_preserves_errors(
     use_case: Callable[..., object],
     command: BaseModel,
     success_message: str,
@@ -81,61 +82,52 @@ def test_use_case_logs_outcome_and_preserves_errors(
     orders = MagicMock(spec=OrderRepository)
     orders.get.return_value = order
     orders.list.return_value = [order]
-    uow = MagicMock(spec=UnitOfWork)
-    changes_order = use_case not in (get_order_by_id, list_orders_by_status)
     error = RuntimeError("sensitive SQL parameter")
-
-    def commit() -> None:
-        assert logging_output.getvalue() == ""
-        if fails:
-            raise error
-
-    uow.commit.side_effect = commit
-    if fails and not changes_order:
+    if fails:
+        orders.add.side_effect = error
         orders.get.side_effect = error
+        orders.save.side_effect = error
         orders.list.side_effect = error
-    arguments = (command, orders, uow) if changes_order else (command, orders)
+    arguments = (command, orders)
 
     if fails:
         with pytest.raises(RuntimeError) as caught:
-            use_case(*arguments)
+            await use_case(*arguments)
         assert caught.value is error
     else:
-        use_case(*arguments)
-        if changes_order:
-            uow.commit.assert_called_once()
+        await use_case(*arguments)
 
     output = logging_output.getvalue()
     assert len(output.splitlines()) == 1
     assert re.match(
         r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [+-]\d{2}:\d{2}", output
     )
-    assert f"{use_case.__module__}:{use_case.__name__}:" in output
     if fails:
+        assert f"use_case={use_case.__name__}" in output
         assert "ERROR" in output
         assert "작업 실패: RuntimeError" in output
         assert success_message not in output
         assert "sensitive SQL parameter" not in output
     else:
+        assert f"{use_case.__module__}:{use_case.__name__}:" in output
         assert "INFO" in output
         assert success_message in output
 
 
-def test_rule_violation_logs_failure_without_committing(
+async def test_rule_violation_logs_failure_without_committing(
     logging_output: StringIO,
 ) -> None:
     orders = MagicMock(spec=OrderRepository)
     orders.get.return_value = Order(ORDER_ID)
-    uow = MagicMock(spec=UnitOfWork)
 
     with pytest.raises(OrderRuleViolation):
-        confirm_order(ConfirmOrderCommand(order_id=ORDER_ID), orders, uow)
+        await confirm_order(ConfirmOrderCommand(order_id=ORDER_ID), orders)
 
     output = logging_output.getvalue()
-    assert "confirm_order:" in output
+    assert "use_case=confirm_order" in output
     assert "작업 실패: OrderRuleViolation" in output
     assert "완료" not in output
-    uow.commit.assert_not_called()
+    orders.save.assert_not_awaited()
 
 
 def test_reconfiguring_logging_does_not_duplicate_output(

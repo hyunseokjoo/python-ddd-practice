@@ -1,13 +1,13 @@
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.domains.orders.application.exceptions import OrderNotFound
 from app.domains.orders.domain.exceptions import OrderRuleViolation
 from app.domains.orders.presentation.exception_handlers import (
     register_exception_handlers,
 )
-from app.shared.database.uow import ConcurrentModification
 
 
 @pytest.mark.parametrize(
@@ -20,9 +20,7 @@ from app.shared.database.uow import ConcurrentModification
             "상품이 없는 주문은 확정할 수 없습니다.",
         ),
         (
-            ConcurrentModification(
-                "다른 요청이 주문을 변경했습니다. 다시 조회해 주세요."
-            ),
+            StaleDataError("sensitive SQL parameters"),
             409,
             "다른 요청이 주문을 변경했습니다. 다시 조회해 주세요.",
         ),

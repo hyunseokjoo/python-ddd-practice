@@ -3,7 +3,9 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import delete, func, insert, select
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.domains.orders.infrastructure.persistence.order import OrderRow
 from app.domains.orders.infrastructure.persistence.order_line import OrderLineRow
@@ -37,21 +39,27 @@ def test_database_enforces_foreign_keys_and_cascades(database_url: str) -> None:
         engine.dispose()
 
 
-def test_database_disposes_engine_after_failure(
+async def test_database_disposes_engine_after_failure(
     database_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    engine = build_engine(database_url)
+    url = make_url(database_url)
+    if url.drivername == "mysql+pymysql":
+        url = url.set(drivername="mysql+aiomysql")
+    engine = create_async_engine(url)
     monkeypatch.setattr(
-        "app.shared.database.connection.build_engine", lambda url: engine
+        "app.shared.database.connection.create_async_engine",
+        lambda *args, **kwargs: engine,
     )
     try:
-        with patch.object(engine, "dispose", wraps=engine.dispose) as dispose:
+        with patch.object(
+            type(engine), "dispose", autospec=True, wraps=engine.dispose
+        ) as dispose:
             with pytest.raises(RuntimeError, match="application failed"):
-                with open_database(database_url) as sessions:
-                    with sessions() as session:
-                        assert session.get_bind() is engine
-                        assert session.expire_on_commit is False
+                async with open_database(database_url) as sessions:
+                    async with sessions() as session:
+                        assert session.bind is engine
+                        assert session.sync_session.expire_on_commit is False
                     raise RuntimeError("application failed")
-            dispose.assert_called_once_with()
+            dispose.assert_awaited_once()
     finally:
-        engine.dispose()
+        await engine.dispose()
